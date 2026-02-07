@@ -1,1 +1,179 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Óptica Cristal • Envío WhatsApp</title>
+</head>
+<body style="font-family:system-ui;max-width:920px;margin:24px auto;padding:0 12px;">
+  <h2>Envío WhatsApp (360dialog) — CSV</h2>
 
+  <p>
+    CSV esperado: <code>phone</code>, <code>name</code> (como tu <b>export.csv</b>).<br>
+    Se envía usando <b>template aprobado</b>.
+  </p>
+
+  <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+    <label>
+      <div>Template</div>
+      <input id="tpl" value="promo_optica_cristal_01" style="width:260px;padding:8px;">
+    </label>
+
+    <label>
+      <div>Idioma</div>
+      <input id="lang" value="es_AR" style="width:120px;padding:8px;">
+    </label>
+
+    <label>
+      <div>Tamaño lote</div>
+      <input id="batchSize" type="number" value="200" min="50" max="500" style="width:120px;padding:8px;">
+    </label>
+
+    <label>
+      <div>Pausa (ms)</div>
+      <input id="pauseMs" type="number" value="900" min="200" max="10000" style="width:120px;padding:8px;">
+    </label>
+  </div>
+
+  <div style="margin:14px 0;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+    <input id="file" type="file" accept=".csv" />
+    <button id="load" style="padding:9px 12px;">Cargar CSV</button>
+    <button id="send" disabled style="padding:9px 12px;">Enviar</button>
+    <button id="stop" disabled style="padding:9px 12px;">Detener</button>
+  </div>
+
+  <div style="padding:10px;border:1px solid #ddd;border-radius:10px;">
+    <div><b>Contactos leídos:</b> <span id="count">0</span></div>
+    <div><b>Válidos:</b> <span id="valid">0</span></div>
+    <div><b>Enviados OK:</b> <span id="ok">0</span></div>
+    <div><b>Fallidos:</b> <span id="bad">0</span></div>
+    <div><b>Estado:</b> <span id="status">—</span></div>
+  </div>
+
+  <pre id="log" style="margin-top:14px;background:#111;color:#ddd;padding:12px;border-radius:10px;overflow:auto;max-height:360px;"></pre>
+
+<script>
+   const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwIzKBclONtAMHif2FmdnCrdo4Vf2nj8aujfsMEJ94vXjCYx51PksMgQDyo3PCMwzM/exec";
+
+
+  let contacts = [];
+  let stopFlag = false;
+  let sentOk = 0;
+  let sentBad = 0;
+
+  const $ = (id) => document.getElementById(id);
+  const log = (m) => { $("log").textContent += m + "\n"; $("log").scrollTop = 1e9; };
+
+  function setStatus(t){ $("status").textContent = t; }
+  function upd(){ $("count").textContent = contacts.length; $("ok").textContent = sentOk; $("bad").textContent = sentBad; }
+
+  function parseCSV(text) {
+    const lines = text.replace(/\r/g,"").split("\n").filter(l => l.trim() !== "");
+    if (lines.length < 2) return [];
+    const headers = lines[0].split(",").map(h => h.trim().replace(/^"|"$/g,"").toLowerCase());
+    const iPhone = headers.indexOf("phone");
+    const iName  = headers.indexOf("name");
+    if (iPhone === -1 || iName === -1) throw new Error("El CSV debe tener headers: phone,name");
+
+    const out = [];
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(",").map(c => c.trim().replace(/^"|"$/g,""));
+      const phone = (cols[iPhone] || "").trim();
+      const name  = (cols[iName]  || "").trim();
+      out.push({ phone, name });
+    }
+    return out;
+  }
+
+  function isValidPhone(p){ return /^549\d{10}$/.test(String(p||"").trim()); }
+
+  $("load").onclick = async () => {
+    const f = $("file").files[0];
+    if (!f) return alert("Elegí el export.csv primero.");
+    const text = await f.text();
+    let rows;
+    try { rows = parseCSV(text); }
+    catch(e){ return alert(e.message); }
+
+    // Filtramos válidos por seguridad
+    contacts = rows.filter(r => isValidPhone(r.phone));
+    const validCount = contacts.length;
+    $("valid").textContent = validCount;
+    $("count").textContent = rows.length;
+
+    sentOk = 0; sentBad = 0; upd();
+    $("send").disabled = validCount === 0;
+    log("CSV cargado. Válidos: " + validCount);
+    setStatus("Listo");
+  };
+
+  $("stop").onclick = () => { stopFlag = true; setStatus("Deteniendo..."); };
+
+  async function postJSON(data){
+    const resp = await fetch(WEBAPP_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
+    return await resp.json();
+  }
+
+  $("send").onclick = async () => {
+    if (!WEBAPP_URL || WEBAPP_URL.includes("TU_WEBAPP_URL_AQUI")) {
+      return alert("Pegá tu WEBAPP_URL del Apps Script en el index.html");
+    }
+    const templateName = $("tpl").value.trim();
+    const lang = $("lang").value.trim();
+    const batchSize = Math.max(50, Math.min(500, Number($("batchSize").value || 200)));
+    const pauseMs = Math.max(200, Number($("pauseMs").value || 900));
+
+    if (!templateName) return alert("Poné el nombre del template (ej: promo_optica_cristal_01)");
+
+    stopFlag = false;
+    $("stop").disabled = false;
+    $("send").disabled = true;
+
+    setStatus("Enviando...");
+    log("Iniciando envío. Template: " + templateName + " | Lang: " + lang);
+
+    // Enviar en lotes
+    for (let i = 0; i < contacts.length; i += batchSize) {
+      if (stopFlag) break;
+
+      const batch = contacts.slice(i, i + batchSize);
+      log(`Lote ${Math.floor(i/batchSize)+1} (${batch.length} contactos)...`);
+
+      const res = await postJSON({
+        action: "sendBatch",
+        templateName,
+        lang,
+        pauseMs,
+        batch
+      });
+
+      if (!res.ok) {
+        log("ERROR lote: " + (res.error || "desconocido"));
+        setStatus("Error en lote");
+        break;
+      }
+
+      sentOk += (res.sent || 0);
+      sentBad += (res.failed || 0);
+      upd();
+
+      // Mostrar errores resumidos (máximo 5)
+      const errs = (res.results || []).filter(r => !r.ok).slice(0, 5);
+      errs.forEach(e => log(" - Falló " + e.to + " => " + e.error));
+
+      setStatus(`Enviado: ${sentOk} OK / ${sentBad} fallidos`);
+      await new Promise(r => setTimeout(r, 400)); // mini respiro
+    }
+
+    $("stop").disabled = true;
+    $("send").disabled = false;
+    setStatus(stopFlag ? "Detenido" : "Terminado");
+    log(stopFlag ? "Envío detenido por usuario." : "Envío terminado.");
+  };
+</script>
+</body>
+</html>
