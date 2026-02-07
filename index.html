@@ -5,12 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Óptica Cristal • Envío WhatsApp</title>
 </head>
+
 <body style="font-family:system-ui;max-width:920px;margin:24px auto;padding:0 12px;">
   <h2>Envío WhatsApp (360dialog) — CSV</h2>
 
   <p>
     CSV esperado: <code>phone</code>, <code>name</code>.<br>
-    Se envía usando <b>template aprobado</b>.
+    Teléfono formato: <b>549</b> + <b>10 dígitos</b> (ej: 5491136065609).
   </p>
 
   <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
@@ -26,7 +27,7 @@
 
     <label>
       <div>Tamaño lote</div>
-      <input id="batchSize" type="number" value="10" min="1" max="500" style="width:120px;padding:8px;">
+      <input id="batchSize" type="number" value="50" min="1" max="500" style="width:120px;padding:8px;">
     </label>
 
     <label>
@@ -48,13 +49,17 @@
     <div><b>Válidos:</b> <span id="valid">0</span></div>
     <div><b>Enviados (estimado):</b> <span id="ok">0</span></div>
     <div><b>Estado:</b> <span id="status">—</span></div>
+    <div style="margin-top:6px;font-size:13px;color:#555;">
+      Nota: por CORS en GitHub Pages, el navegador no puede leer la respuesta del Apps Script.
+      La confirmación real está en <b>Apps Script → Ejecutar testOne()</b> o <b>Ejecuciones</b>.
+    </div>
   </div>
 
   <pre id="log" style="margin-top:14px;background:#111;color:#ddd;padding:12px;border-radius:10px;overflow:auto;max-height:360px;"></pre>
 
 <script>
-  // ✅ PEGÁ ACÁ TU /exec NUEVO
-  const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyKP09inXbA0eyYbEXpLPeSY06Z2QnlJ53Ony323eGnmmLQvCrwbpxYll4eKjsPPhTA/exec";
+  // ✅ Tu WebApp (exec) del sender
+  const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbz2tg9DA6zXJdn4SbjXQcevaQZzqcabEqkXvUNWDjhodMpIE5fMZFOGEl1kePcGVc53/exec";
 
   let contacts = [];
   let stopFlag = false;
@@ -100,43 +105,58 @@
     try { rows = parseCSV(text); }
     catch(e){ return alert(e.message); }
 
-    contacts = rows.filter(r => isValidPhone(r.phone));
+    const validRows = rows.filter(r => isValidPhone(r.phone));
+    contacts = validRows;
+
+    $("valid").textContent = validRows.length;
     $("count").textContent = rows.length;
-    $("valid").textContent = contacts.length;
 
     sentEstimated = 0; upd();
-    $("send").disabled = contacts.length === 0;
+    $("send").disabled = validRows.length === 0;
 
-    log("CSV cargado. Leídos: " + rows.length + " | Válidos: " + contacts.length);
+    log("CSV cargado.");
+    log("Leídos: " + rows.length);
+    log("Válidos: " + validRows.length);
     setStatus("Listo");
   };
 
   $("stop").onclick = () => { stopFlag = true; setStatus("Deteniendo..."); };
 
-  async function fireAndForget(data){
+  // ✅ Anti-CORS 100%: enviamos form-urlencoded (sin headers) para evitar preflight
+  async function fireAndForgetSendBatch(data){
+    const body = new URLSearchParams();
+    body.set("action", data.action);
+    body.set("templateName", data.templateName);
+    body.set("lang", data.lang);
+    body.set("pauseMs", String(data.pauseMs));
+    body.set("batch", JSON.stringify(data.batch));
+
     await fetch(WEBAPP_URL, {
       method: "POST",
       mode: "no-cors",
-      body: JSON.stringify(data)
+      body
     });
+
     return true;
   }
 
   $("send").onclick = async () => {
     const templateName = $("tpl").value.trim();
     const lang = $("lang").value.trim();
-    const batchSize = Math.max(1, Math.min(500, Number($("batchSize").value || 10)));
+    const batchSize = Math.max(1, Math.min(500, Number($("batchSize").value || 50)));
     const pauseMs = Math.max(0, Number($("pauseMs").value || 900));
 
-    if (!templateName) return alert("Poné el nombre del template.");
-    if (!contacts.length) return alert("Cargá un CSV válido.");
+    if (!templateName) return alert("Poné el nombre del template (ej: promo_optica_cristal_01)");
+    if (!contacts.length) return alert("Primero cargá un CSV con teléfonos válidos.");
 
     stopFlag = false;
     $("stop").disabled = false;
     $("send").disabled = true;
 
     setStatus("Enviando...");
-    log("Envío iniciado. Template: " + templateName + " | Lang: " + lang);
+    log("Iniciando envío...");
+    log("Template: " + templateName + " | Lang: " + lang + " | Lote: " + batchSize + " | Pausa: " + pauseMs + "ms");
+    log("TIP: Mirá Apps Script → Ejecuciones para ver HTTP 200/400 y el motivo.");
 
     for (let i = 0; i < contacts.length; i += batchSize) {
       if (stopFlag) break;
@@ -146,25 +166,32 @@
 
       log(`Lote ${loteN} (${batch.length}) → disparando...`);
 
-      await fireAndForget({
-        action: "sendBatch",
-        templateName,
-        lang,
-        pauseMs,
-        batch
-      });
+      try {
+        await fireAndForgetSendBatch({
+          action: "sendBatch",
+          templateName,
+          lang,
+          pauseMs,
+          batch
+        });
 
-      sentEstimated += batch.length;
-      upd();
-      setStatus(`Enviado (estimado): ${sentEstimated}`);
+        sentEstimated += batch.length;
+        upd();
+        setStatus(`Enviado (estimado): ${sentEstimated}`);
+        log(`Lote ${loteN} disparado ✅`);
+      } catch (e) {
+        log("ERROR al disparar lote " + loteN + ": " + (e && e.message ? e.message : e));
+        setStatus("Error (frontend)");
+        break;
+      }
 
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, 350));
     }
 
     $("stop").disabled = true;
     $("send").disabled = false;
     setStatus(stopFlag ? "Detenido" : "Terminado");
-    log(stopFlag ? "Detenido por usuario." : "Terminado.");
+    log(stopFlag ? "Envío detenido por usuario." : "Envío terminado.");
   };
 </script>
 </body>
