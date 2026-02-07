@@ -26,12 +26,12 @@
 
     <label>
       <div>Tamaño lote</div>
-      <input id="batchSize" type="number" value="200" min="50" max="500" style="width:120px;padding:8px;">
+      <input id="batchSize" type="number" value="200" min="1" max="500" style="width:120px;padding:8px;">
     </label>
 
     <label>
       <div>Pausa (ms)</div>
-      <input id="pauseMs" type="number" value="900" min="200" max="10000" style="width:120px;padding:8px;">
+      <input id="pauseMs" type="number" value="900" min="0" max="10000" style="width:120px;padding:8px;">
     </label>
   </div>
 
@@ -40,32 +40,35 @@
     <button id="load" style="padding:9px 12px;">Cargar CSV</button>
     <button id="send" disabled style="padding:9px 12px;">Enviar</button>
     <button id="stop" disabled style="padding:9px 12px;">Detener</button>
+    <button id="ping" style="padding:9px 12px;">Probar ping</button>
   </div>
 
   <div style="padding:10px;border:1px solid #ddd;border-radius:10px;">
     <div><b>Contactos leídos:</b> <span id="count">0</span></div>
     <div><b>Válidos:</b> <span id="valid">0</span></div>
-    <div><b>Enviados OK:</b> <span id="ok">0</span></div>
-    <div><b>Fallidos:</b> <span id="bad">0</span></div>
+    <div><b>Enviados (estimado):</b> <span id="ok">0</span></div>
     <div><b>Estado:</b> <span id="status">—</span></div>
+    <div style="margin-top:6px;font-size:13px;color:#555;">
+      Nota: por CORS (GitHub Pages), el navegador no puede leer la respuesta del Apps Script.
+      La confirmación real está en <b>Apps Script → Registro de ejecución</b> y/o en el teléfono (si llegaron).
+    </div>
   </div>
 
   <pre id="log" style="margin-top:14px;background:#111;color:#ddd;padding:12px;border-radius:10px;overflow:auto;max-height:360px;"></pre>
 
 <script>
-   const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwIzKBclONtAMHif2FmdnCrdo4Vf2nj8aujfsMEJ94vXjCYx51PksMgQDyo3PCMwzM/exec";
-
+  // ✅ TU WEBAPP NUEVA
+  const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxSml7tceXW0rw1xnwvmDaz8PGCKg8MaoyrYo2ELO35RGA103LWjmV2IMj6HCmnBpDH/exec";
 
   let contacts = [];
   let stopFlag = false;
-  let sentOk = 0;
-  let sentBad = 0;
+  let sentEstimated = 0;
 
   const $ = (id) => document.getElementById(id);
   const log = (m) => { $("log").textContent += m + "\n"; $("log").scrollTop = 1e9; };
 
   function setStatus(t){ $("status").textContent = t; }
-  function upd(){ $("count").textContent = contacts.length; $("ok").textContent = sentOk; $("bad").textContent = sentBad; }
+  function upd(){ $("count").textContent = contacts.length; $("ok").textContent = sentEstimated; }
 
   function parseCSV(text) {
     const lines = text.replace(/\r/g,"").split("\n").filter(l => l.trim() !== "");
@@ -87,6 +90,12 @@
 
   function isValidPhone(p){ return /^549\d{10}$/.test(String(p||"").trim()); }
 
+  $("ping").onclick = () => {
+    const url = WEBAPP_URL + "?action=ping";
+    window.open(url, "_blank");
+    log("Abriendo ping: " + url);
+  };
+
   $("load").onclick = async () => {
     const f = $("file").files[0];
     if (!f) return alert("Elegí el export.csv primero.");
@@ -96,83 +105,96 @@
     catch(e){ return alert(e.message); }
 
     // Filtramos válidos por seguridad
-    contacts = rows.filter(r => isValidPhone(r.phone));
-    const validCount = contacts.length;
-    $("valid").textContent = validCount;
+    const validRows = rows.filter(r => isValidPhone(r.phone));
+    contacts = validRows;
+
+    $("valid").textContent = validRows.length;
     $("count").textContent = rows.length;
 
-    sentOk = 0; sentBad = 0; upd();
-    $("send").disabled = validCount === 0;
-    log("CSV cargado. Válidos: " + validCount);
+    sentEstimated = 0; upd();
+    $("send").disabled = validRows.length === 0;
+
+    log("CSV cargado.");
+    log("Leídos: " + rows.length);
+    log("Válidos (549 + 10 dígitos): " + validRows.length);
     setStatus("Listo");
   };
 
   $("stop").onclick = () => { stopFlag = true; setStatus("Deteniendo..."); };
 
-  async function postJSON(data){
-    const resp = await fetch(WEBAPP_URL, {
+  // ✅ POST anti-CORS:
+  // - mode: "no-cors" (no bloquea el request)
+  // - sin headers (evita preflight)
+  async function fireAndForget(data){
+    await fetch(WEBAPP_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      mode: "no-cors",
       body: JSON.stringify(data)
     });
-    return await resp.json();
+    // no devolvemos json porque el browser no lo puede leer en no-cors
+    return true;
   }
 
   $("send").onclick = async () => {
     if (!WEBAPP_URL || WEBAPP_URL.includes("TU_WEBAPP_URL_AQUI")) {
       return alert("Pegá tu WEBAPP_URL del Apps Script en el index.html");
     }
+
     const templateName = $("tpl").value.trim();
     const lang = $("lang").value.trim();
-    const batchSize = Math.max(50, Math.min(500, Number($("batchSize").value || 200)));
-    const pauseMs = Math.max(200, Number($("pauseMs").value || 900));
+    const batchSize = Math.max(1, Math.min(500, Number($("batchSize").value || 200)));
+    const pauseMs = Math.max(0, Number($("pauseMs").value || 900));
 
     if (!templateName) return alert("Poné el nombre del template (ej: promo_optica_cristal_01)");
+    if (!contacts.length) return alert("Primero cargá un CSV con teléfonos válidos.");
 
     stopFlag = false;
     $("stop").disabled = false;
     $("send").disabled = true;
 
     setStatus("Enviando...");
-    log("Iniciando envío. Template: " + templateName + " | Lang: " + lang);
+    log("Iniciando envío.");
+    log("Template: " + templateName + " | Lang: " + lang + " | Lote: " + batchSize + " | Pausa: " + pauseMs + "ms");
 
-    // Enviar en lotes
     for (let i = 0; i < contacts.length; i += batchSize) {
       if (stopFlag) break;
 
       const batch = contacts.slice(i, i + batchSize);
-      log(`Lote ${Math.floor(i/batchSize)+1} (${batch.length} contactos)...`);
+      const loteN = Math.floor(i / batchSize) + 1;
 
-      const res = await postJSON({
-        action: "sendBatch",
-        templateName,
-        lang,
-        pauseMs,
-        batch
-      });
+      log(`Lote ${loteN} (${batch.length} contactos) → enviando...`);
 
-      if (!res.ok) {
-        log("ERROR lote: " + (res.error || "desconocido"));
-        setStatus("Error en lote");
+      try {
+        // 🔥 dispara el envío (Apps Script procesa)
+        await fireAndForget({
+          action: "sendBatch",
+          templateName,
+          lang,
+          pauseMs,
+          batch
+        });
+
+        // como no podemos leer respuesta, marcamos estimado
+        sentEstimated += batch.length;
+        upd();
+        setStatus(`Enviado (estimado): ${sentEstimated}`);
+
+        log(`Lote ${loteN} disparado. Mirá Apps Script → Registro de ejecución para confirmar.`);
+      } catch (e) {
+        log("ERROR al disparar lote " + loteN + ": " + (e && e.message ? e.message : e));
+        setStatus("Error (frontend)");
         break;
       }
 
-      sentOk += (res.sent || 0);
-      sentBad += (res.failed || 0);
-      upd();
-
-      // Mostrar errores resumidos (máximo 5)
-      const errs = (res.results || []).filter(r => !r.ok).slice(0, 5);
-      errs.forEach(e => log(" - Falló " + e.to + " => " + e.error));
-
-      setStatus(`Enviado: ${sentOk} OK / ${sentBad} fallidos`);
-      await new Promise(r => setTimeout(r, 400)); // mini respiro
+      // mini respiro para no saturar el navegador
+      await new Promise(r => setTimeout(r, 350));
     }
 
     $("stop").disabled = true;
     $("send").disabled = false;
     setStatus(stopFlag ? "Detenido" : "Terminado");
-    log(stopFlag ? "Envío detenido por usuario." : "Envío terminado.");
+    log(stopFlag ? "Envío detenido por usuario." : "Envío terminado (disparado).");
+    log("Confirmación REAL: Apps Script → Registro de ejecución + chequear WhatsApp.");
   };
 </script>
 </body>
