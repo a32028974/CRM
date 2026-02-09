@@ -1,150 +1,87 @@
 <!doctype html>
 <html lang="es">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Envío WhatsApp (360dialog) — CSV</title>
-<style>
-  body{font-family:system-ui,Arial;margin:20px}
-  .box{max-width:760px;border:1px solid #ddd;border-radius:12px;padding:14px}
-  input{padding:8px;border:1px solid #ccc;border-radius:8px}
-  button{padding:8px 12px;border-radius:10px;border:1px solid #ccc;cursor:pointer}
-  pre{background:#111;color:#eaeaea;padding:12px;border-radius:12px;overflow:auto}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Envío WhatsApp (360dialog) — CSV</title>
+  <style>
+    body{font-family:system-ui,Arial;margin:20px}
+    .box{max-width:860px;border:1px solid #ddd;border-radius:12px;padding:14px}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+    .field{display:flex;flex-direction:column;gap:6px}
+    input{padding:8px;border:1px solid #ccc;border-radius:8px}
+    button{padding:8px 12px;border-radius:10px;border:1px solid #bbb;cursor:pointer;background:#f6f6f6}
+    button.primary{background:#111;color:#fff;border-color:#111}
+    button.danger{background:#ffeded;border-color:#ffb3b3}
+    .small{font-size:12px;color:#555}
+    .stat{margin-top:10px;padding:10px;border:1px solid #eee;border-radius:10px;background:#fafafa}
+    pre{background:#111;color:#eaeaea;padding:12px;border-radius:12px;overflow:auto;max-width:860px;white-space:pre-wrap}
+    .warn{color:#b26a00;font-weight:700}
+    .ok{color:#1a7f37;font-weight:700}
+  </style>
 </head>
 <body>
 
 <div class="box">
   <h2>Envío WhatsApp (360dialog) — CSV</h2>
 
-  <p><b>CSV esperado:</b> phone,name<br>
-  <b>Teléfono:</b> 549 + número (ej: 5491136065609)</p>
+  <div class="small">
+    CSV esperado: <b>phone,name</b><br>
+    Teléfono: <b>549 + número</b> (ej: <b>5491136065609</b>)<br>
+    <span class="warn">Por CORS en GitHub Pages, no se puede leer la respuesta del Apps Script.</span><br>
+    <span class="ok">La confirmación REAL está en tu Google Sheet → pestaña <b>LOG</b>.</span>
+  </div>
 
-  <div style="display:flex;gap:10px;flex-wrap:wrap">
-    <div>
-      <div>Template</div>
-      <input id="template" value="promo_optica_cristal_01">
+  <div class="row" style="margin-top:12px">
+    <div class="field">
+      <label>Template</label>
+      <input id="template" value="promo_optica_cristal_01" />
     </div>
-    <div>
-      <div>Idioma</div>
-      <input id="lang" value="es_AR">
+
+    <div class="field">
+      <label>Idioma</label>
+      <input id="lang" value="es_AR" />
     </div>
-    <div>
-      <div>Tamaño lote</div>
-      <input id="lot" value="50" style="width:90px">
+
+    <div class="field">
+      <label>Tamaño lote</label>
+      <input id="lot" value="50" style="width:90px" />
     </div>
-    <div>
-      <div>Pausa (ms)</div>
-      <input id="pause" value="900" style="width:90px">
+
+    <div class="field">
+      <label>Pausa (ms)</label>
+      <input id="pause" value="900" style="width:90px" />
     </div>
   </div>
 
-  <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-    <input type="file" id="file" accept=".csv">
+  <div class="row" style="margin-top:12px">
+    <div class="field">
+      <label>CSV</label>
+      <input type="file" id="file" accept=".csv" />
+    </div>
+
     <button id="btnLoad">Cargar CSV</button>
-    <button id="btnSend">Enviar</button>
+    <button class="primary" id="btnSend">Enviar</button>
     <button id="btnPing">Probar ping</button>
+    <button class="danger" id="btnClear">Limpiar</button>
   </div>
 
-  <div style="margin-top:10px">
-    <div>Contactos leídos: <b id="cRead">0</b> | Válidos: <b id="cOk">0</b></div>
+  <div class="stat">
+    Contactos leídos: <b id="cRead">0</b> |
+    Válidos: <b id="cOk">0</b> |
+    Estado: <b id="status">—</b>
+    <div class="small" style="margin-top:6px">
+      Tip: probá primero con tu CSV de <b>2 números</b>. Si falla, mirá el error real en <b>LOG</b>.
+    </div>
   </div>
 </div>
 
 <h3>Log</h3>
 <pre id="log"></pre>
 
-<script>
-const API_URL = "https://script.google.com/macros/s/AKfycbzTtvjlTXqIeGJRK2qdll4ubGogviRbFDIPylodLINuu_z-WB9GOPmSILWc0AzT4Qz2/exec";
+<!-- Iframe oculto: hace que el POST funcione sin CORS -->
+<iframe name="wa_sink" style="display:none"></iframe>
 
-const logEl = document.getElementById("log");
-function log(s){ logEl.textContent += s + "\n"; logEl.scrollTop = logEl.scrollHeight; }
-
-let contacts = [];
-
-function parseCSV(text){
-  const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
-  if (lines.length <= 1) return [];
-  const out = [];
-  for (let i=1;i<lines.length;i++){
-    const parts = lines[i].split(",");
-    const phone = (parts[0]||"").trim();
-    const name  = (parts[1]||"").trim();
-    if (phone) out.push({phone, name});
-  }
-  return out;
-}
-
-async function postForm(params){
-  // FORM-URLENCODED -> Simple Request -> NO preflight
-  const body = new URLSearchParams(params);
-
-  // OJO: por CORS quizá no puedas leer la respuesta, pero el envío se ejecuta igual.
-  // Igual intentamos leerla; si falla, no pasa nada.
-  const res = await fetch(API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
-    body
-  });
-
-  // Si CORS bloquea lectura, esto puede tirar error. Lo atrapamos arriba.
-  return res.json();
-}
-
-document.getElementById("btnLoad").onclick = async ()=>{
-  const f = document.getElementById("file").files[0];
-  if (!f) return alert("Elegí un CSV");
-  const text = await f.text();
-  contacts = parseCSV(text);
-
-  document.getElementById("cRead").textContent = contacts.length;
-  document.getElementById("cOk").textContent = contacts.length;
-
-  log("CSV cargado.");
-  log("Leídos: " + contacts.length);
-};
-
-document.getElementById("btnPing").onclick = async ()=>{
-  log("Ping...");
-  try{
-    const r = await fetch(API_URL + "?action=ping").then(x=>x.json());
-    log("PING OK: " + JSON.stringify(r));
-  }catch(e){
-    log("PING ERROR (CORS no afecta al ping normalmente): " + e);
-  }
-};
-
-document.getElementById("btnSend").onclick = async ()=>{
-  if (!contacts.length) return alert("Primero cargá un CSV");
-
-  const template = document.getElementById("template").value.trim();
-  const lang = document.getElementById("lang").value.trim();
-  const lot = document.getElementById("lot").value.trim();
-  const pause = document.getElementById("pause").value.trim();
-
-  log("Iniciando envío...");
-  log(`Template: ${template} | Lang: ${lang} | Lote: ${lot} | Pausa: ${pause}ms`);
-  log("TIP: La confirmación REAL queda en la hoja LOG del Apps Script.");
-
-  try{
-    const r = await postForm({
-      action: "send_batch",
-      template,
-      lang,
-      lot,
-      pause,
-      csv: JSON.stringify(contacts)
-    });
-    log("RESP: " + JSON.stringify(r));
-    log("Envío terminado.");
-  }catch(e){
-    // Si te bloquea CORS leyendo respuesta, igual el envío se disparó.
-    log("No pude leer la respuesta (CORS). Igual revisá la hoja LOG del Script.");
-    log("Detalle: " + e);
-    log("Envío disparado (si tu WebApp está OK).");
-  }
-};
-</script>
-
+<script src="app.js"></script>
 </body>
 </html>
