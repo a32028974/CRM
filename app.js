@@ -5,7 +5,7 @@
 ========================== */
 
 /** ✅ Pegá tu /exec acá */
-const API_URL = "https://script.google.com/macros/s/AKfycbzTtvjlTXqIeGJRK2qdll4ubGogviRbFDIPylodLINuu_z-WB9GOPmSILWc0AzT4Qz2/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycby1oMF16lHCsM_b-gtc1WLjqAHS4JEls8sc7oj8sQA3YZLRBo2H4UfsNoJ-8-VOFk2c/exec";
 
 const $ = (id)=>document.getElementById(id);
 const logEl = $("log");
