@@ -22,7 +22,7 @@ function updateStats(enviados) {
     $("progress-percent").textContent = porc + "%";
 }
 
-// Cargar CSV
+// Cargar CSV con Filtro de Duplicados
 $("btnLoad").addEventListener("click", () => {
     const file = $("file").files[0];
     if (!file) return alert("Seleccioná el archivo CSV.");
@@ -31,27 +31,40 @@ $("btnLoad").addEventListener("click", () => {
     reader.onload = (e) => {
         const text = e.target.result;
         const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-        contacts = [];
         
+        let rawContacts = [];
         for (let i = 1; i < lines.length; i++) {
             const parts = lines[i].split(",");
             if (parts[0]) {
-                // Limpiamos el número de cualquier caracter que no sea número
+                // Limpieza: solo números y quitamos espacios
                 let cleanPhone = parts[0].replace(/\D/g, "");
-                contacts.push({
+                rawContacts.push({
                     phone: cleanPhone,
                     name: parts[1] ? parts[1].trim() : "Cliente"
                 });
             }
         }
+
+        // --- LÓGICA ANTI-DUPLICADOS ---
+        const uniquePhones = new Set();
+        contacts = rawContacts.filter(c => {
+            if (uniquePhones.has(c.phone)) return false;
+            uniquePhones.add(c.phone);
+            return true;
+        });
+        // ------------------------------
+
+        const duplicados = rawContacts.length - contacts.length;
         $("cRead").textContent = contacts.length;
         $("cLeft").textContent = contacts.length;
-        log(`✅ Base cargada: ${contacts.length} contactos.`);
+        
+        log(`✅ Base cargada: ${contacts.length} contactos únicos.`, "#10b981");
+        if(duplicados > 0) log(`⚠️ Se omitieron ${duplicados} números duplicados.`, "#f59e0b");
     };
     reader.readAsText(file);
 });
 
-// Iniciar Envío
+// Iniciar Envío Masivo
 $("btnSend").addEventListener("click", async () => {
     if (!contacts.length) return alert("Cargá un CSV.");
     const template = $("template").value.trim();
@@ -71,7 +84,7 @@ $("btnSend").addEventListener("click", async () => {
             params.append("template", template);
             params.append("lang", lang);
 
-            // Usamos POST para enviar
+            // POST al Apps Script
             await fetch(API_URL, {
                 method: "POST",
                 mode: "no-cors",
@@ -81,17 +94,22 @@ $("btnSend").addEventListener("click", async () => {
             enviadosCount++;
             updateStats(enviadosCount);
             
-            if (enviadosCount % 5 === 0) log(`Progreso: ${enviadosCount} enviados...`);
+            if (enviadosCount % 10 === 0) log(`Progreso: ${enviadosCount} enviados...`);
             
             await new Promise(r => setTimeout(r, pause));
         } catch (err) {
             log(`❌ Error con ${person.phone}: ${err.message}`, "#ef4444");
         }
     }
-    log("🏁 PROCESO COMPLETADO", "#10b981");
+    log("🏁 DIFUSIÓN COMPLETADA", "#10b981");
 });
 
-// Botón de Diagnóstico
+// Botón de Diagnóstico (Abre el log de errores de 360dialog)
 $("btnPing").addEventListener("click", () => {
     window.open(`${API_URL}?action=leer_error`, "_blank");
+});
+
+// Limpiar todo
+$("btnClear").addEventListener("click", () => {
+    if(confirm("¿Limpiar lista cargada?")) location.reload();
 });
