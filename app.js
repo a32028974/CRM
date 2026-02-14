@@ -1,4 +1,5 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbz5h3GQpCmPVqRpgAdr53AhzmyZ6wB20xGpUClJeVGDQYWsGeCOkihg10l2uHqmexk/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbx92G9e29dw9cee6p2Tf1rxTe8eqQKB6wtllUrmZiDL_4MoJboLzOHQTcyblvqymMQv/exec";
+
 const $ = (id) => document.getElementById(id);
 const logEl = $("log");
 let contacts = [];
