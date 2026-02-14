@@ -3,84 +3,94 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Envío WhatsApp (360dialog) — CSV</title>
+  <title>CRM WhatsApp • Óptica Cristal</title>
   <style>
-    body{font-family:system-ui,Arial;margin:20px}
-    .box{max-width:860px;border:1px solid #ddd;border-radius:12px;padding:14px}
-    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
-    .field{display:flex;flex-direction:column;gap:6px}
-    input{padding:8px;border:1px solid #ccc;border-radius:8px}
-    button{padding:8px 12px;border-radius:10px;border:1px solid #bbb;cursor:pointer;background:#f6f6f6}
-    button.primary{background:#111;color:#fff;border-color:#111}
-    button.danger{background:#ffeded;border-color:#ffb3b3}
-    .small{font-size:12px;color:#555}
-    .stat{margin-top:10px;padding:10px;border:1px solid #eee;border-radius:10px;background:#fafafa}
-    pre{background:#111;color:#eaeaea;padding:12px;border-radius:12px;overflow:auto;max-width:860px;white-space:pre-wrap}
-    .warn{color:#b26a00;font-weight:700}
-    .ok{color:#1a7f37;font-weight:700}
+    :root {
+      --primary: #2563eb;
+      --danger: #ef4444;
+      --bg: #f8fafc;
+      --text: #1e293b;
+    }
+    body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 20px; line-height: 1.5; }
+    .box { max-width: 900px; margin: 0 auto; background: #fff; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); padding: 24px; border: 1px solid #e2e8f0; }
+    h1 { font-size: 20px; margin-top: 0; display: flex; align-items: center; gap: 10px; }
+    .row { display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 20px; align-items: flex-end; }
+    .field { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 150px; }
+    label { font-size: 13px; font-weight: 600; color: #64748b; }
+    input { padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; outline: none; transition: border 0.2s; }
+    input:focus { border-color: var(--primary); }
+    
+    button { padding: 10px 16px; border-radius: 8px; border: 1px solid #cbd5e1; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.2s; background: #fff; }
+    button:hover { background: #f1f5f9; }
+    button.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+    button.primary:hover { opacity: 0.9; transform: translateY(-1px); }
+    button.danger { color: var(--danger); border-color: #fee2e2; }
+    button.danger:hover { background: #fef2f2; }
+
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 15px; background: #f1f5f9; padding: 15px; border-radius: 12px; margin-bottom: 20px; }
+    .stat-item { display: flex; flex-direction: column; }
+    .stat-val { font-size: 18px; font-weight: 800; color: var(--primary); }
+    .stat-lab { font-size: 11px; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px; }
+
+    .console { background: #0f172a; color: #38bdf8; padding: 15px; border-radius: 12px; font-family: 'Cascadia Code', Consolas, monospace; font-size: 12px; height: 200px; overflow-y: auto; white-space: pre-wrap; border: 1px solid #1e293b; }
+    progress { width: 100%; height: 10px; border-radius: 10px; margin-bottom: 10px; accent-color: var(--primary); }
+    .status-bar { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px; font-weight: 600; }
   </style>
 </head>
 <body>
 
 <div class="box">
-  <h2>Envío WhatsApp (360dialog) — CSV</h2>
-
-  <div class="small">
-    CSV esperado: <b>phone,name</b><br>
-    Teléfono: <b>549 + número</b> (ej: <b>5491136065609</b>)<br>
-    <span class="warn">Por CORS en GitHub Pages, no se puede leer la respuesta del Apps Script.</span><br>
-    <span class="ok">La confirmación REAL está en tu Google Sheet → pestaña <b>LOG</b>.</span>
-  </div>
-
-  <div class="row" style="margin-top:12px">
+  <h1>📲 CRM Difusión WhatsApp</h1>
+  
+  <div class="row">
     <div class="field">
-      <label>Template</label>
-      <input id="template" value="promo_optica_cristal_01" />
+      <label>Template (Nombre en Meta)</label>
+      <input id="template" value="promo_optica_cristal_01" placeholder="Ej: saludo_bienvenida" />
     </div>
-
     <div class="field">
       <label>Idioma</label>
       <input id="lang" value="es_AR" />
     </div>
-
     <div class="field">
-      <label>Tamaño lote</label>
-      <input id="lot" value="50" style="width:90px" />
-    </div>
-
-    <div class="field">
-      <label>Pausa (ms)</label>
-      <input id="pause" value="900" style="width:90px" />
+        <label>Pausa entre lotes (ms)</label>
+        <input id="pause" type="number" value="1500" />
     </div>
   </div>
 
-  <div class="row" style="margin-top:12px">
+  <div class="row">
     <div class="field">
-      <label>CSV</label>
+      <label>Subir base de contactos (CSV)</label>
       <input type="file" id="file" accept=".csv" />
     </div>
-
     <button id="btnLoad">Cargar CSV</button>
-    <button class="primary" id="btnSend">Enviar</button>
-    <button id="btnPing">Probar ping</button>
-    <button class="danger" id="btnClear">Limpiar</button>
+    <button class="primary" id="btnSend">🚀 Iniciar Envío Masivo</button>
+    <button id="btnPing">📡 Probar Conexión</button>
+    <button class="danger" id="btnClear">Limpiar todo</button>
   </div>
 
-  <div class="stat">
-    Contactos leídos: <b id="cRead">0</b> |
-    Válidos: <b id="cOk">0</b> |
-    Estado: <b id="status">—</b>
-    <div class="small" style="margin-top:6px">
-      Tip: probá primero con tu CSV de <b>2 números</b>. Si falla, mirá el error real en <b>LOG</b>.
+  <div class="status-bar">
+    <span id="status-text">Listo para cargar base...</span>
+    <span id="progress-percent">0%</span>
+  </div>
+  <progress id="pbar" value="0" max="100"></progress>
+
+  <div class="stat-grid">
+    <div class="stat-item">
+      <span class="stat-val" id="cRead">0</span>
+      <span class="stat-lab">Contactos</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-val" id="cOk">0</span>
+      <span class="stat-lab">Enviados</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-val" id="cLeft">0</span>
+      <span class="stat-lab">Pendientes</span>
     </div>
   </div>
+
+  <div class="console" id="log"></div>
 </div>
-
-<h3>Log</h3>
-<pre id="log"></pre>
-
-<!-- Iframe oculto: hace que el POST funcione sin CORS -->
-<iframe name="wa_sink" style="display:none"></iframe>
 
 <script src="app.js"></script>
 </body>
