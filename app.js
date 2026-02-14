@@ -3,7 +3,7 @@
  * Lógica de envío por lotes para bases grandes
  */
 
-const API_URL = "https://script.google.com/macros/s/AKfycbz203TlLTaxgcOalBE_sIexuELTosu_l_0anrA18i7tXUkZlude-ApZOPNVFnysBNgt/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbwvdgqdOQf0zAUJ9UCJpCIYnBeE3L5mxjQ0Mx21YTwMWzj2ocCDxApR39mkhffPMHrf/exec";
 
 const $ = (id) => document.getElementById(id);
 const logEl = $("log");
