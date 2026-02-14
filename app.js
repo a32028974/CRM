@@ -1,14 +1,7 @@
-/**
- * CRM WHATSAPP - ÓPTICA CRISTAL
- * Lógica de envío por lotes para bases grandes
- */
-
 const API_URL = "https://script.google.com/macros/s/AKfycbz5h3GQpCmPVqRpgAdr53AhzmyZ6wB20xGpUClJeVGDQYWsGeCOkihg10l2uHqmexk/exec";
-
 const $ = (id) => document.getElementById(id);
 const logEl = $("log");
 let contacts = [];
-let isStop = false;
 
 function log(s, color = "#38bdf8") {
     const time = new Date().toLocaleTimeString();
@@ -23,7 +16,6 @@ function updateStats(enviados) {
     $("cOk").textContent = enviados;
     const pendientes = contacts.length - enviados;
     $("cLeft").textContent = pendientes >= 0 ? pendientes : 0;
-    
     const porc = Math.round((enviados / contacts.length) * 100) || 0;
     $("pbar").value = porc;
     $("progress-percent").textContent = porc + "%";
@@ -32,89 +24,73 @@ function updateStats(enviados) {
 // Cargar CSV
 $("btnLoad").addEventListener("click", () => {
     const file = $("file").files[0];
-    if (!file) return alert("Seleccioná el archivo CSV primero.");
+    if (!file) return alert("Seleccioná el archivo CSV.");
 
     const reader = new FileReader();
     reader.onload = (e) => {
         const text = e.target.result;
         const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-        
         contacts = [];
-        // Empezamos en 1 para saltar el encabezado (phone, name)
+        
         for (let i = 1; i < lines.length; i++) {
             const parts = lines[i].split(",");
             if (parts[0]) {
+                // Limpiamos el número de cualquier caracter que no sea número
+                let cleanPhone = parts[0].replace(/\D/g, "");
                 contacts.push({
-                    phone: parts[0].trim(),
+                    phone: cleanPhone,
                     name: parts[1] ? parts[1].trim() : "Cliente"
                 });
             }
         }
-        
         $("cRead").textContent = contacts.length;
         $("cLeft").textContent = contacts.length;
-        log(`Base cargada: ${contacts.length} contactos listos.`);
-        $("status-text").textContent = "Base lista para difusión.";
+        log(`✅ Base cargada: ${contacts.length} contactos.`);
     };
     reader.readAsText(file);
 });
 
-// Botón de Envío
+// Iniciar Envío
 $("btnSend").addEventListener("click", async () => {
-    if (!contacts.length) return alert("Cargá un CSV primero.");
+    if (!contacts.length) return alert("Cargá un CSV.");
     const template = $("template").value.trim();
     const lang = $("lang").value.trim();
     const pause = parseInt($("pause").value) || 1200;
 
-    if (!confirm(`¿Confirmás el envío a ${contacts.length} personas?`)) return;
+    if (!confirm(`¿Enviar a ${contacts.length} personas?`)) return;
 
-    $("status-text").textContent = "🚀 Difusión en curso...";
-    log("Iniciando proceso masivo...", "#10b981");
+    log("🚀 Iniciando difusión masiva...", "#10b981");
 
     let enviadosCount = 0;
-
     for (const person of contacts) {
         try {
-            // Preparamos los datos para Google
-            const formData = new URLSearchParams();
-            formData.append("action", "send_one");
-            formData.append("phone", person.phone);
-            formData.append("name", person.name);
-            formData.append("template", template);
-            formData.append("lang", lang);
+            const params = new URLSearchParams();
+            params.append("phone", person.phone);
+            params.append("name", person.name);
+            params.append("template", template);
+            params.append("lang", lang);
 
-            // Enviamos (usamos no-cors porque Google no siempre responde amigablemente a navegadores)
-            fetch(API_URL, {
+            // Usamos POST para enviar
+            await fetch(API_URL, {
                 method: "POST",
                 mode: "no-cors",
-                body: formData
+                body: params
             });
 
             enviadosCount++;
             updateStats(enviadosCount);
             
-            if (enviadosCount % 10 === 0) {
-                log(`Progreso: ${enviadosCount} enviados...`);
-            }
-
-            // Pausa obligatoria entre mensajes para seguridad
+            if (enviadosCount % 5 === 0) log(`Progreso: ${enviadosCount} enviados...`);
+            
             await new Promise(r => setTimeout(r, pause));
-
         } catch (err) {
             log(`❌ Error con ${person.phone}: ${err.message}`, "#ef4444");
         }
     }
-
-    log("✅ DIFUSIÓN FINALIZADA CON ÉXITO", "#10b981");
-    $("status-text").textContent = "Finalizado.";
+    log("🏁 PROCESO COMPLETADO", "#10b981");
 });
 
-// Ping
+// Botón de Diagnóstico
 $("btnPing").addEventListener("click", () => {
-    window.open(`${API_URL}?action=ping`, "_blank");
-});
-
-// Limpiar
-$("btnClear").addEventListener("click", () => {
-    location.reload();
+    window.open(`${API_URL}?action=leer_error`, "_blank");
 });
